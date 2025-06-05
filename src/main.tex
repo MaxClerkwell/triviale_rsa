@@ -1,0 +1,199 @@
+\documentclass[a4paper,11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[german]{babel}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+
+\title{Einführung in eine triviale RSA-Verschlüsselung}
+\author{Autor: Stephan Bökelmann}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Glossar (Wörterbuch)}
+Im Folgenden werden alle relevanten Begriffe erklärt, die man für das Verständnis einer einfachen RSA-Verschlüsselung benötigt.
+
+\begin{description}
+  \item[Asymmetrische Kryptographie] Kryptographie-Verfahren, bei denen zum Ver- und Entschlüsseln zwei unterschiedliche Schlüsselpaare verwendet werden: ein öffentlicher Schlüssel (Public Key) und ein privater Schlüssel (Private Key).
+  \item[Chiffrat (Ciphertext)] Das Ergebnis der Verschlüsselung: Die Nachricht in verschlüsselter Form.
+  \item[Datenübertragung] Der Prozess, bei dem verschlüsselte Nachrichten über ein Netzwerk (z.\,B. SSH) von einem Absender zum Empfänger gesendet werden.
+  \item[Exponent] In der RSA-Notation bezeichnet man den öffentlichen Exponenten mit \(e\) und den privaten Exponenten mit \(d\). Diese Exponenten werden benutzt, um Zahlen für Ver- und Entschlüsselung potenziert zu rechnen (z.\,B. \(m^e \bmod n\)).
+  \item[Hashfunktion] Eine Funktion, die eine beliebig lange Eingabe (z.\,B. eine Nachricht) in einen festen, kleineren Ausgabewert (Hashwert) abbildet. Häufig genutzt bei Signaturen, um Nachrichten zunächst zu hashen und dann die Hashwerte digital zu signieren.
+  \item[Klartext (Plaintext)] Die ursprüngliche Nachricht, bevor sie verschlüsselt wird.
+  \item[Modul (Modulus)] In RSA bezeichnet \(n\) das Produkt zweier großer Primzahlen \(p\) und \(q\). Alle Rechenoperationen (Potenzieren) erfolgen modulo \(n\).
+  \item[Öffentlicher Schlüssel (Public Key)] Paar \((n, e)\), das jedem bekannt ist. Wird zum Verschlüsseln von Nachrichten oder zum Verifizieren von Signaturen verwendet.
+  \item[Padding] Vorgehen, um eine Nachricht oder Datenblöcke vor der RSA-Verschlüsselung auf eine feste Größe zu bringen und zusätzliche Sicherheitseigenschaften (z.\,B. Indistinguishability) zu gewährleisten. Beispiele: PKCS\#1 v1.5, OAEP.
+  \item[Privater Schlüssel (Private Key)] Paar \((n, d)\), das nur dem Empfänger (Signer) bekannt ist. Wird zum Entschlüsseln von Nachrichten oder zum Signieren von Daten verwendet.
+  \item[Primzahl (Prime)] Eine natürliche Zahl \(>1\), die nur durch 1 und sich selbst teilbar ist. In RSA werden zwei große Primzahlen \(p\) und \(q\) zufällig gewählt, um \(n = p \cdot q\) zu bilden.
+  \item[Eulersche Phi-Funktion (Euler’sche Totientfunktion)] Für eine Zahl \(n=pq\) (Produkt zweier unterschiedlicher Primzahlen) gilt: \(\varphi(n) = (p-1)\,(q-1)\). Wichtig für die Berechnung des privaten Exponenten \(d\).
+  \item[RSA] Ein asymmetrisches Kryptosystem, benannt nach seinen Erfindern Rivest, Shamir und Adleman. Beruht auf der Schwierigkeit der Faktorisierung großer Zahlen.
+  \item[Signature (Digitale Signatur)] Eine kryptographische Methode, mit der der Absender einer Nachricht seine Identität beweisen kann. Basierend auf der RSA-Signatur: \(\sigma = H(m)^d \bmod n\), wobei \(H(m)\) der Hashwert der Nachricht ist.
+  \item[Verifikation] Prozess, bei dem der Empfänger oder eine andere beliebige Partei unter Verwendung des öffentlichen Schlüssels überprüft, ob eine Signatur gültig ist und somit die Authentizität und Integrität der Nachricht gewährleistet ist.
+\end{description}
+
+\newpage
+\section{Schlüsselgenerierung}
+\label{sec:schluesselgenerierung}
+In diesem Abschnitt beschreiben wir Schritt für Schritt, wie man einen Privat- und einen öffentlichen RSA-Schlüssel erzeugt. Wir gehen von einer vereinfachten, aber funktionalen Variante aus.
+
+\subsection{Schritt 1: Wahl der Primzahlen \(p\) und \(q\)}
+\begin{enumerate}
+  \item Wähle zwei zufällige, große Primzahlen \(p\) und \(q\). In der Praxis sollten \(p\) und \(q\) jeweils mehrere hundert oder tausend Bits lang sein, damit die Faktorisierung von \(n = p \cdot q\) nicht mehr praktikabel ist. Für ein triviales Beispiel kann man auch kleinere Primzahlen verwenden.
+  \item Stelle sicher, dass \(p \neq q\). Falls zufällig \(p = q\) gewählt wird, wähle eines der beiden neu, um Sicherheit zu gewährleisten.
+\end{enumerate}
+
+\subsection{Schritt 2: Berechnung von \(n\) (Modulus) und \(\varphi(n)\)}
+\begin{align*}
+  n &= p \cdot q, \\
+  \varphi(n) &= (p - 1)\,(q - 1).
+\end{align*}
+\begin{itemize}
+  \item \(n\) ist der Modul, in dem alle RSA-Berechnungen stattfinden. Er wird Teil des öffentlichen Schlüssels und des privaten Schlüssels.
+  \item \(\varphi(n)\) (Eulersche Phi-Funktion) wird benötigt, um den privaten Exponenten \(d\) zu berechnen.
+\end{itemize}
+
+\subsection{Schritt 3: Wahl des öffentlichen Exponenten \(e\)}
+\begin{enumerate}
+  \item Wähle eine Zahl \(e\) mit \(1 < e < \varphi(n)\).
+  \item Stelle sicher, dass \(\gcd(e, \varphi(n)) = 1\), d.\,h. \(e\) und \(\varphi(n)\) sind teilerfremd.
+  \item Typische Wahl in der Praxis: \(e = 65537\), da diese Zahl sowohl eine geringe Hamminggewicht-Binärdarstellung hat als auch als ausreichend sicher gilt.
+\end{enumerate}
+
+\subsection{Schritt 4: Berechnung des privaten Exponenten \(d\)}
+\begin{align*}
+  d &\equiv e^{-1} \pmod{\varphi(n)},
+\end{align*}
+das heißt, \(d\) ist das multiplikative Inverse von \(e\) modulo \(\varphi(n)\). Formal findet man \(d\) über den erweiterten euklidischen Algorithmus, sodass
+\[
+  e \cdot d \equiv 1 \pmod{\varphi(n)}.
+\]
+
+\subsection{Ergebnis: Schlüsselpaar}
+\begin{itemize}
+  \item \textbf{Öffentlicher Schlüssel (Public Key):} \((n, e)\).
+  \item \textbf{Privater Schlüssel (Private Key):} \((n, d)\).\\
+  $\quad$In der Praxis speichert man den privaten Schlüssel sicher, z.\,B. in einer PEM-Datei mit Schutzmechanismen (Passphrase, Hardware-Sicherheitsmodul, etc.).
+\end{itemize}
+
+\section{Signieren einer Nachricht}
+\label{sec:signieren}
+Nachdem die Schlüssel generiert wurden, kann man Nachrichten digital signieren, um ihre Authentizität und Integrität nachzuweisen.
+
+\subsection{Schritt 1: Hashen der Nachricht}
+Zu signierende Nachricht (Klartext) bezeichnen wir mit \(m\). Zunächst wird \(m\) mit einer kryptographisch sicheren Hashfunktion \(H\) auf einen festen Wert abgebildet:
+\[
+  h = H(m).
+\]
+Beispiele für gebräuchliche Hashfunktionen sind SHA-256, SHA-3, etc.
+
+\subsection{Schritt 2: Erzeugen der Signatur}
+Die digitale Signatur \(\sigma\) erhält man durch Potenzieren des Hashwerts mit dem privaten Exponenten \(d\) modulo \(n\):
+\[
+  \sigma = h^d \bmod n \;=\; H(m)^d \bmod n.
+\]
+Wichtig:
+\begin{itemize}
+  \item Man signiert nicht direkt den Klartext, sondern den Hash der Nachricht. Dadurch wird sichergestellt, dass für beliebig lange Nachrichten trotzdem nur ein festformatiger Wert signiert wird.
+  \item In der Praxis kommen zusätzlich Padding-Schemata (z.\,B. PSS) zum Einsatz, damit die Signatur sicherer ist.
+\end{itemize}
+
+\subsection{Schritt 3: Versand von \((m, \sigma)\)}
+Der Signierende (Absender) sendet sowohl die Nachricht \(m\) als auch die Signatur \(\sigma\) an den Empfänger. Der Empfänger kann anschließend die Signatur überprüfen (siehe Abschnitt \ref{sec:verifikation}).
+
+\section{Übertragung einer Nachricht (Beispiel SSH)}
+\label{sec:uebertragung}
+SSH (Secure Shell) ist ein weitverbreitetes Protokoll zum sicheren Einloggen und zur Ausführung von Kommandos auf entfernten Systemen. Ein Aspekt von SSH ist die Authentifizierung mittels RSA. Hier beschreiben wir den grundsätzlichen Ablauf:
+
+\subsection{Schritt 1: Einrichtung von Schlüsseln auf dem Client}
+\begin{enumerate}
+  \item Der Benutzer auf dem Client-Rechner erzeugt ein Schlüsselpaar \((n, e)\) und \((n, d)\) gemäß Abschnitt \ref{sec:schluesselgenerierung}.
+  \item Der öffentliche Schlüssel \((n, e)\) wird in die Datei \texttt{~/.ssh/id\_rsa.pub} geschrieben und kann von dort aus auf Servern abgelegt werden.
+  \item Der private Schlüssel \((n, d)\) wird in der Datei \texttt{~/.ssh/id\_rsa} gespeichert und durch eine Passphrase geschützt.
+\end{enumerate}
+
+\subsection{Schritt 2: Hinterlegen des Public Keys auf dem Server}
+\begin{itemize}
+  \item Der öffentliche Schlüssel (z.\,B. der Inhalt von \texttt{id\_rsa.pub}) wird in der Datei \texttt{~/.ssh/authorized\_keys} auf dem Ziel-Server ergänzt.
+  \item Der Server speichert nun eine Liste vertrauenswürdiger öffentlicher Schlüssel, für die er SSH-Anfragen akzeptiert.
+\end{itemize}
+
+\subsection{Schritt 3: Authentifizierung beim Anmelden}
+Beim Verbindungsaufbau führt SSH einen Challenge-Response-Mechanismus durch:
+\begin{enumerate}
+  \item Der Client sendet dem Server seinen Benutzernamen und eine Anforderung zur Authentifizierung mit öffentlichem Schlüssel.
+  \item Der Server sucht in \texttt{authorized\_keys} nach einem passenden öffentlichen Schlüssel \((n,e)\). Falls gefunden, erzeugt er eine zufällige Challenge \(c\) und sendet diese an den Client.
+  \item Der Client signiert \(c\) mit seinem privaten Schlüssel:
+    \[
+      s = c^d \bmod n.
+    \]
+  \item Der Client sendet die Signatur \(s\) zurück an den Server.
+  \item Der Server überprüft die Signatur, indem er mit dem gespeicherten öffentlichen Schlüssel \((n,e)\) rechnet:
+    \[
+      c' = s^e \bmod n.
+    \]
+    Stimmen \(c'\) und \(c\) überein, ist der Client als Inhaber des korrespondierenden privaten Schlüssels authentifiziert. Die SSH-Verbindung wird aufgebaut.
+\end{enumerate}
+
+\subsection{Bemerkungen zur Übertragung}
+\begin{itemize}
+  \item Die SSH-Session selbst ist verschlüsselt, gewöhnlich nicht allein mit RSA, sondern mit symmetrischen Algorithmen (z.\,B. AES). RSA dient primär zur Authentifizierung und zum Schlüsselaustausch (Key Exchange).
+  \item Nach erfolgreicher Authentifizierung vereinbaren Client und Server einen gemeinsamen Sitzungsschlüssel für die symmetrische Verschlüsselung der restlichen Kommunikation.
+\end{itemize}
+
+\section{Verifikation des Absenders}
+\label{sec:verifikation}
+Die Verifikation des Absenders stellt sicher, dass eine Nachricht tatsächlich von der Person stammt, die den entsprechenden privaten Schlüssel besitzt, und dass der Inhalt unterwegs nicht verändert wurde.
+
+\subsection{Schritt 1: Empfangene Daten}
+Der Empfänger erhält:
+\begin{itemize}
+  \item Die Originalnachricht \(m\).
+  \item Die Signatur \(\sigma\).
+  \item Den öffentlichen Schlüssel \((n, e)\) des potenziellen Absenders (z.\,B. über ein öffentliches Schlüsselinventar, eine Zertifikatsinfrastruktur oder per SSH schon im Voraus autorisiert).
+\end{itemize}
+
+\subsection{Schritt 2: Hashen der empfangenen Nachricht}
+\begin{align*}
+  h' &= H(m),
+\end{align*}
+dabei benutzt man dieselbe Hashfunktion \(H\), mit der der Absender seine Nachricht gehasht hat.
+
+\subsection{Schritt 3: Verifikation der Signatur}
+\[
+  h'' \;=\; \sigma^e \bmod n \;=\; (H(m)^d)^e \bmod n \;=\; H(m)^{d\,e} \bmod n.
+\]
+Da \(d \cdot e \equiv 1 \pmod{\varphi(n)}\), gilt
+\[
+  H(m)^{d\,e} \equiv H(m) \pmod{n},
+\]
+also
+\[
+  h'' = H(m) \bmod n.
+\]
+Man vergleicht nun \(h''\) mit \(h'\). Stimmen die Werte überein, ist die Signatur gültig:
+\[
+  h' \overset{?}{=} h''.
+\]
+\begin{itemize}
+  \item Ist der Vergleich erfolgreich, so wurde die Nachricht mit dem privaten Schlüssel signiert, der zum öffentlichen Schlüssel \((n,e)\) gehört. Damit ist die Authentizität des Absenders (Besitz des privaten Schlüssels) und die Integrität der Nachricht (keine Veränderung) gewährleistet.
+  \item Falls die Werte nicht übereinstimmen, wurde die Signatur nicht korrekt erzeugt, der öffentliche Schlüssel ist falsch oder die Nachricht wurde manipuliert.
+\end{itemize}
+
+\section{Fazit und Sicherheitshinweise}
+\begin{itemize}
+  \item \textbf{Schlüssellänge:} In diesem Dokument wurde eine „triviale“ RSA-Beschreibung gegeben. In der Praxis sollten RSA-Schlüssel mindestens 2048 Bit (besser 3072 oder 4096 Bit) lang sein, um gegen moderne Angriffe resistent zu bleiben.
+  \item \textbf{Zufallszahlengenerator:} Für die Wahl von \(p\) und \(q\) sollte ein kryptographisch sicherer Zufallsgenerator (CSPRNG) verwendet werden, etwa \texttt{/dev/urandom} auf Unix-Systemen oder Bibliotheken wie \texttt{OpenSSL}.
+  \item \textbf{Padding-Schemata:} In realen Anwendungen nutzt man Padding-Verfahren (z.\,B. OAEP beim Verschlüsseln, PSS beim Signieren), um zusätzliche Sicherheit gegen Nachrichtenmanipulationen und gezielte Angriffe (Chosen Ciphertext Attack, etc.) zu gewährleisten.
+  \item \textbf{Schlüsselmanagement:} Private Schlüssel müssen sicher aufbewahrt werden (Passphrase, Hardware-Sicherheitsmodul). Der Verlust oder Diebstahl des privaten Schlüssels macht alle darauf basierenden Signaturen und Verschlüsselungen unsicher.
+  \item \textbf{SSH-Verfahren:} SSH verwendet RSA nur für den Authentifizierungsmechanismus und den initialen Schlüsselaustausch. Die eigentliche Datenübertragung läuft üblicherweise über symmetrische Verschlüsselung, welche wesentlich schneller für große Datenmengen ist.
+\end{itemize}
+
+\end{document}
